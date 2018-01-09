@@ -9,7 +9,7 @@ next 25 years anyone will live longer than 128 years in these countries. Data, r
 or genetic backgrounds. These results, and the analysis methods developed in this paper, can help testing biological theories of aging and aid conﬁrmation of success of eﬀorts to ﬁnd a cure for aging.
 
 ## Supplementary materials
-[**LATool**](http://www.zholud.com/articles/supplementary-materials/extreme-human-life-lengths/LATool.zip) - a MATLAB toolbox for life length analysis which makes it possible to obtain more detailed results and do alternative analyses.
+[**LATool**](https://github.com/OGCJN/Human-life-is-unlimited---but-short/tree/master/Supplementary%20Materials/LATool/) - a MATLAB toolbox for life length analysis which makes it possible to obtain more detailed results and do alternative analyses.
 
 ## Reference
 Rootzen, H. and Zholud, D. (2017). [**Human life is unlimited - but short**](http://www.zholud.com/articles/Human-life-is-unlimited-but-short.pdf), *Extremes*, Vol. 20, No. 4, pp. 713-728.
