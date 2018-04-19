@@ -12,7 +12,7 @@ or genetic backgrounds. These results, and the analysis methods developed in thi
 [**LATool**](https://github.com/OGCJN/Human-life-is-unlimited---but-short/tree/master/Supplementary%20Materials/LATool/) - a MATLAB toolbox for life length analysis which makes it possible to obtain more detailed results and do alternative analyses.
 
 ## Reference
-Rootzen, H. and Zholud, D. (2017). [**Human life is unlimited - but short**](http://www.zholud.com/articles/Human-life-is-unlimited-but-short.pdf), *Extremes*, Vol. 20, No. 4, pp. 713-728.
+Rootzén, H. and Zholud, D. (2017). [**Human life is unlimited - but short**](http://www.zholud.com/articles/Human-life-is-unlimited-but-short.pdf), *Extremes*, Vol. 20, No. 4, pp. 713-728.
 
 ## BiBTeX
 
