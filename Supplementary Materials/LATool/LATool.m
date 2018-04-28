@@ -66,21 +66,26 @@ function LATool_OpeningFcn(hObject, ~, handles, varargin)
                  'United States','USA',0,0,0,0,0,0,0,0,0,0;
                  'GRG Data','GRG',0,0,0,0,0,0,0,0,0,0;};
 
-    if exist('data.mat', 'file') == 2
-        tmp = load('data.mat','data');
-    else 
+    if exist('data.mat', 'file') ~= 2
+        
         uiwait(msgbox('To use LATool you must create a user account at www.supercentenarians.org/DataBase and download data.mat file. The file contains data from the International ?Database on Longevity and should be put in the same folder as LATool.m.','LATool: loading data...','modal'));
+        
         web('http://www.supercentenarians.org/DataBase');
+        
         handles.closeFigure = true;
+        
         guidata(hObject, handles);
+        
         return;
+        
     end
 
+    tmp = load('data.mat','data');
     handles.data = tmp.data;
-
+    
     handles.countries = Countries;
     handles.SelectedCountries = 1;
-    handles.Excluded = cell2mat(tmp.data(:,12));
+    handles.Excluded = cell2mat(handles.data(:,12));
     handles.Before = 2000;
     handles.After = 2000;
     handles.u = 110;
@@ -98,13 +103,18 @@ function LATool_OpeningFcn(hObject, ~, handles, varargin)
        Countries{k,4} = sum(strcmp(handles.data(:,5),'F')&strcmp(handles.data(:,7),Countries(k,2)));
        Countries{k,5} = sum(strcmp(handles.data(:,7),Countries(k,2)));   
        Countries{k,6} = sum((cell2mat(handles.data(:,12))>0)&strcmp(handles.data(:,7),Countries(k,2))); 
+       
        E = (cell2mat(handles.data(:,12)) > 0)|(cell2mat(handles.data(:,11))<=handles.u-0.00001);
        C = strcmp(handles.data(:,7),Countries(k,2));
+       
        x = cell2mat(handles.data(C&(~E),11));
+       
        [par, CI] = gpfit(x(x>=handles.u)-handles.u+0.00001);
+       
        Countries{k,7} = par(1);
        Countries{k,8} = CI(1,1);
        Countries{k,9} = CI(2,1);
+       
        Countries{k,10} = par(2);
        Countries{k,11} = CI(1,2);
        Countries{k,12} = CI(2,2);
@@ -151,47 +161,51 @@ function varargout = LATool_OutputFcn(hObject, ~, handles)
         delete(hObject);
     end
     
-function LL=LLCGPD(gamma,sigma,x)
+function LL=LLGPD(gamma,sigma,x)
 
     n=numel(x);
 
     eps=0.0000001;
 
-    if abs(gamma)<eps
+    if abs(gamma) < eps
         LL = -n*log(sigma)-sum(x)/sigma;
     else
         LL = -n*log(sigma)-(1/gamma+1)*sum(log(1+(gamma/sigma)*x));    
     end
 
-function LL=LLCExp(sigma,x)
+function LL=LLExp(sigma,x)
 
     n=numel(x);
     
     LL = -n*log(sigma)-sum(x)/sigma;   
     
     
-function LL=LLExpUnbiased(sigma,x,bi,ui)
+function LL=LLExpUnbiased(sigma,xi,ti,bi,ei)
 
-    n = numel(x);
+    n = numel(xi);
     
-    I = bi < 0;
+    I = (ti <= bi);
     
-    LL = -n*log(sigma) - sum(x)/sigma -...
-         sum(log(exp(bi(I)/sigma)-exp(-(ui(I)-bi(I))/sigma))) - ...
-         sum(log(1-exp(-(ui(~I)-bi(~I))/sigma)));
+    emt = ei - ti;
+    bmt = bi - ti;
+    
+    LL = -n*log(sigma) - sum(xi)/sigma -...
+         sum(log( exp(-bmt(I)/sigma) - exp(-emt(I)/sigma) )) - ...
+         sum(log( 1-exp(-emt(~I)/sigma) ));
 
-function [sigma, CI_sigma]=EstimateExpUnbiased(li,bi,ui) 
+function [sigma, CI_sigma]=EstimateExpUnbiased(xi,ti,bi,ei) 
     
-    I = isnan(li)|isnan(bi)|isnan(ui);
+    I = isnan(xi)|isnan(ti)|isnan(bi)|isnan(ei);
     
-    li(I)=[];
+    xi(I)=[];
+    ti(I)=[];
     bi(I)=[];
-    ui(I)=[];
+    ei(I)=[];
 
-    sigma = fmincon(@(x) -LLExpUnbiased(x,li,bi,ui),1,[],[],[],[],0.000001, 100,...
+    sigma = fmincon(@(x) -LLExpUnbiased(x,xi,ti,bi,ei),1,[],[],[],[],0.000001, 100,...
             [],optimoptions(@fmincon,'Algorithm','interior-point','TolX',1e-12,'Display','Off'));
 
-    Hessian = hessian(@(x) -LLExpUnbiased(x,li,bi,ui),sigma);
+    Hessian = hessian(@(x) -LLExpUnbiased(x,xi,ti,bi,ei),sigma);
 
     if Hessian(1,1)~=0
 
@@ -215,51 +229,58 @@ function [sigma, CI_sigma]=EstimateExpUnbiased(li,bi,ui)
       
     end     
 
-function LL=LLGPDUnbiased(gamma,sigma,x,bi,ui)
+function LL=LLGPDUnbiased(gamma,sigma,xi,ti,bi,ei)
 
-    eps=0.0000001;
+    eps=0.000000001;
     
     if abs(gamma) < eps
-        LL = LLExpUnbiased(sigma,x,bi,ui);
+        
+        LL = LLExpUnbiased(sigma,xi,ti,bi,ei);
+        
     else
         
-        n = numel(x);
-        I = bi < 0;
+        n = numel(xi);
+        
+        I = (ti <= bi);
+
+        emt = ei - ti;
+        bmt = bi - ti;
     
-        LL = -n*log(sigma)-(1/gamma+1)*sum(log(1+(gamma/sigma)*x)) - ...
-             sum(log((1-(gamma/sigma)*bi(I)).^(-1/gamma) - (1+(gamma/sigma)*(ui(I)-bi(I))).^(-1/gamma))) - ...
-             sum(log(1-(1+(gamma/sigma)*(ui(~I)-bi(~I))).^(-1/gamma)));  
+        LL = -n*log(sigma)-(1/gamma+1)*sum(log(1+(gamma/sigma)*xi)) - ...
+             sum(log( (max(0,1+(gamma/sigma)*bmt(I))).^(-1/gamma) - max(0,1+(gamma/sigma)*emt(I)).^(-1/gamma) )) - ...
+             sum(log(1-(max(0,1+(gamma/sigma)*(emt(~I)))).^(-1/gamma)));  
           
     end
 
 
 
-function [gamma, sigma, CI_gamma, CI_sigma]=EstimateGPDUnbiased(li,bi,ui) 
+function [gamma, sigma, CI_gamma, CI_sigma]=EstimateGPDUnbiased(xi,ti,bi,ei) 
 
-    I = isnan(li)|isnan(bi)|isnan(ui);
+    I = isnan(xi)|isnan(ti)|isnan(bi)|isnan(ei);
     
-    li(I)=[];
+    xi(I)=[];
+    ti(I)=[];
     bi(I)=[];
-    ui(I)=[];
+    ei(I)=[];
+    
+    maxxi = max(xi);
 
-    maxli = max([max(li) max(ui-bi) max(bi)]);
-
-    x0=fmincon(@(x) -LLExpUnbiased(x,li,bi,ui),1,[],[],[],[],0.000001, 100,...
+    x0=fmincon(@(x) -LLExpUnbiased(x,xi,ti,bi,ei),1,[],[],[],[],0.000001, 20,...
       [],optimoptions(@fmincon,'Algorithm','interior-point','TolX',1e-12,'Display','Off'));
 
-    x1=fmincon(@(x) -LLGPDUnbiased(x(1),x(2),li,bi,ui), [ 0.5 maxli],[],[],[],[],[0.000001 0.000001 ],[9.99999 100],...
+    x1=fmincon(@(x) -LLGPDUnbiased(x(1),x(2),xi,ti,bi,ei), [ 0.5 maxxi ],[0 -1],0,[],[],[0.000001 0.000001 ],[100 100],...
       [],optimoptions(@fmincon,'Algorithm','interior-point','TolX',1e-12,'Display','Off'));
 
-    x2=fmincon(@(x) -LLGPDUnbiased(x(1),x(2),li,bi,ui), [-0.5 maxli],[0, -1; -maxli, -1],[0 0],[],[],[-100 0.000001 ],[-0.000001 100],...
+    x2=fmincon(@(x) -LLGPDUnbiased(x(1),x(2),xi,ti,bi,ei), [-0.5 maxxi ],[0, -1; -maxxi, -1],[0 0],[],[],[-100 0.000001 ],[-0.000001 100],...
       [],optimoptions(@fmincon,'Algorithm','interior-point','TolX',1e-12,'Display','Off'));
 
-    if -LLGPDUnbiased(x1(1),x1(2),li,bi,ui) < -LLExpUnbiased(x0,li,bi,ui)
-        if  -LLGPDUnbiased(x1(1),x1(2),li,bi,ui) < -LLGPDUnbiased(x2(1),x2(2),li,bi,ui)
+    if -LLGPDUnbiased(x1(1),x1(2),xi,ti,bi,ei) < -LLExpUnbiased(x0,xi,ti,bi,ei)
+        if  -LLGPDUnbiased(x1(1),x1(2),xi,ti,bi,ei) < -LLGPDUnbiased(x2(1),x2(2),xi,ti,bi,ei)
             x=x1;
         else
             x=x2;
         end
-    elseif -LLGPDUnbiased(x2(1),x2(2),li,bi,ui) < -LLExpUnbiased(x0,li,bi,ui)
+    elseif -LLGPDUnbiased(x2(1),x2(2),xi,ti,bi,ei) < -LLExpUnbiased(x0,xi,ti,bi,ei)
         x=x2;     
     else
         x=[0 x0]; 
@@ -271,7 +292,7 @@ function [gamma, sigma, CI_gamma, CI_sigma]=EstimateGPDUnbiased(li,bi,ui)
     % Confidence intervals for unbiased estimation for the GPD may not be
     % reliable for gamma close to zero!!!
 
-    Hessian = hessian(@(x) -LLGPDUnbiased(x(1),x(2),li,bi,ui),x);
+    Hessian = hessian(@(x) -LLGPDUnbiased(x(1),x(2),xi,ti,bi,ei),x);
     
     if isreal(Hessian)
         
@@ -392,8 +413,8 @@ function [LB, UB] = CensoringBounds(country)
         LB=1973;
         UB=2004;  
     elseif strcmp(country,'JPN')
-        LB=YYYYMMDD2Year(19950901);
-        UB=YYYYMMDD2Year(20050901); 
+        LB=YYYYMMDD2Year(19960930);
+        UB=YYYYMMDD2Year(20050930); 
     elseif strcmp(country,'NOR')
         LB=1989;
         UB=2005; 
@@ -420,8 +441,10 @@ function [LB, UB] = CensoringBounds(country)
 function MakeScatterPlot(hObject,handles)
    
     I = false(size(handles.data,1),1);
+    
     M = strcmp(handles.data(:,5),'M');
     F = strcmp(handles.data(:,5),'F');
+    
     E = (cell2mat(handles.data(:,12)) > 0)|(cell2mat(handles.data(:,11))<=handles.u-0.00001);
 
     if get(handles.radiobuttonPlotAgainstBirth,'Value') == 1
@@ -465,7 +488,7 @@ function MakeScatterPlot(hObject,handles)
             if get(handles.radiobuttonFilter2Before,'Value') == 1
                if sum(BB&IS)>0  
                    
-                   DDMinObs = floor(min(YYYYMMDD2Year(cell2mat(handles.data(BB&IS,9)))));
+                   DDMinObs = min(YYYYMMDD2Year(cell2mat(handles.data(BB&IS,9))));
                    
                    if isnan(LB)
                     DDMin(IS) = DDMinObs;
@@ -481,12 +504,16 @@ function MakeScatterPlot(hObject,handles)
                    
                    DDMin(IS) = handles.After;
                    
-                   DDMaxObs = ceil(max(YYYYMMDD2Year(cell2mat(handles.data(BA&IS,9)))));
+                   DDMaxObs = max(YYYYMMDD2Year(cell2mat(handles.data(BA&IS,9))));
                    
                    if isnan(UB)
-                    DDMax(IS) = DDMaxObs;
+                       DDMax(IS) = DDMaxObs;
+                   elseif strcmp(country,'USA') && (get(handles.checkboxExcludeUSAAfter2000,'Value') == 1)
+                       DDMax(IS)=2000; 
+                   elseif strcmp(country,'JPN') && (get(handles.checkboxExcludeJapanAfter2000,'Value') == 1)
+                       DDMax(IS)=YYYYMMDD2Year(20040901);                     
                    else
-                    DDMax(IS) = max(UB,DDMaxObs);
+                       DDMax(IS) = max(UB,DDMaxObs);
                    end
          
                end 
@@ -494,8 +521,8 @@ function MakeScatterPlot(hObject,handles)
                 
                if sum(IS)>0  
                    
-                   DDMinObs = floor(min(YYYYMMDD2Year(cell2mat(handles.data(IS,9)))));
-                   DDMaxObs = ceil(max(YYYYMMDD2Year(cell2mat(handles.data(IS,9)))));
+                   DDMinObs = min(YYYYMMDD2Year(cell2mat(handles.data(IS,9))));
+                   DDMaxObs = max(YYYYMMDD2Year(cell2mat(handles.data(IS,9))));
                    
                    if isnan(LB)
                     DDMin(IS) = DDMinObs;
@@ -602,9 +629,10 @@ function MakeScatterPlot(hObject,handles)
         x = cell2mat(handles.data(S,11))';
 
         if (handles.UnbiasedEstimation == true)&&(sum(S)>0)
-           li = x - handles.u;
-           bi = YYYYMMDD2Year(cell2mat(handles.data(S,9)))'-li-DDMin(S);
-           ui = DDMax(S)-DDMin(S);
+           xi = x - handles.u;
+           ti = YYYYMMDD2Year(cell2mat(handles.data(S,9)))' - x + 110;
+           bi = DDMin(S);
+           ei = DDMax(S);
         end
 
         set(handles.textN,'String', num2str(numel(x))); 
@@ -613,19 +641,19 @@ function MakeScatterPlot(hObject,handles)
         if ~isempty(x)
 
             if handles.UnbiasedEstimation == true
-                [gamma, sigma, CI_gamma, CI_sigma]=EstimateGPDUnbiased(li,bi,ui);
+                [gamma, sigma, CI_gamma, CI_sigma]=EstimateGPDUnbiased(xi,ti,bi,ei);
                 par = [gamma sigma];
                 CI  = [CI_gamma, CI_sigma]; 
                 CIEP = [nan(1) nan(1)];
             else
                 
-                [par, CI] = gpfit(x-handles.u+0.00001);
+                [par, CI] = gpfit(x-handles.u+0.0000001);
 
                 if (par(1)<0)
 
                     ephat = -par(2)/par(1);
 
-                    [~,acov] = gplike(par, x-handles.u+0.00001);
+                    [~,acov] = gplike(par, x-handles.u+0.0000001);
 
                     dh = [par(2)/(par(1)^2) -1/par(1)]';
 
@@ -653,7 +681,7 @@ function MakeScatterPlot(hObject,handles)
                 set(handles.textShapeR,'String', num2str(CI(2,1)));    
                 set(handles.textScaleL,'String', num2str(CI(1,2)));
                 set(handles.textScaleR,'String', num2str(CI(2,2)));  
-                set(handles.textLL,'String', num2str(LLGPDUnbiased(par(1),par(2),li,bi,ui)));
+                set(handles.textLL,'String', num2str(LLGPDUnbiased(par(1),par(2),xi,ti,bi,ei)));
             else
                 set(handles.textUEGPL,'String', num2str(CIEP(1)));
                 set(handles.textUEGPR,'String', num2str(CIEP(2)));
@@ -661,11 +689,11 @@ function MakeScatterPlot(hObject,handles)
                 set(handles.textShapeR,'String', num2str(CI(2,1)));    
                 set(handles.textScaleL,'String', num2str(CI(1,2)));
                 set(handles.textScaleR,'String', num2str(CI(2,2)));            
-                set(handles.textLL,'String', num2str(LLCGPD(par(1),par(2),x-handles.u)))
+                set(handles.textLL,'String', num2str(LLGPD(par(1),par(2),x-handles.u)))
             end        
 
             if handles.UnbiasedEstimation == true
-                [parE, CIE] = EstimateExpUnbiased(li,bi,ui);
+                [parE, CIE] = EstimateExpUnbiased(xi,ti,bi,ei);
             else
                 [parE, CIE] = expfit(x-handles.u+0.00001);
             end            
@@ -675,15 +703,15 @@ function MakeScatterPlot(hObject,handles)
             set(handles.textScaleER,'String', num2str(CIE(2,1)));
 
             if handles.UnbiasedEstimation == true
-                set(handles.textLLE,'String', num2str(LLExpUnbiased(parE(1),li,bi,ui)));
+                set(handles.textLLE,'String', num2str(LLExpUnbiased(parE(1),xi,ti,bi,ei)));
             else
-                set(handles.textLLE,'String', num2str(LLCExp(parE(1),x-handles.u)));
+                set(handles.textLLE,'String', num2str(LLExp(parE(1),x-handles.u)));
             end
 
             if handles.UnbiasedEstimation == true
-                PLS = 2*(LLGPDUnbiased(par(1),par(2),li,bi,ui) - LLExpUnbiased(parE(1),li,bi,ui));
+                PLS = 2*(LLGPDUnbiased(par(1),par(2),xi,ti,bi,ei) - LLExpUnbiased(parE(1),xi,ti,bi,ei));
             else
-                PLS = 2*(LLCGPD(par(1),par(2),x-handles.u) - LLCExp(parE(1),x-handles.u));
+                PLS = 2*(LLGPD(par(1),par(2),x-handles.u) - LLExp(parE(1),x-handles.u));
             end
 
             P = 1 - chi2cdf(PLS,1); 
